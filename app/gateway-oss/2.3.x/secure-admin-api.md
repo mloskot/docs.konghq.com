@@ -110,6 +110,108 @@ From here, simply apply desired Kong-specific security controls (such as
 [IP restrictions][ip-restriction], or [access control lists][acl]) as you would
 normally to any other Kong API.
 
+If you are using docker to host Kong, you can accomplish a similar task via a declarative configuration such as this one:
+
+``` yaml
+_format_version: "1.1"
+
+services:
+- name: admin-api
+  url: http://127.0.0.1:8001
+  routes:
+    - paths:
+      - /admin-api
+  plugins:
+  - name: key-auth
+
+consumers:
+- username: admin
+  keyauth_credentials:
+  - key: secret
+```
+
+Under this configuration, the Admin API will be available via the `/admin-api` but only for requests accopanied with `?apikey=secret` query
+parameters.
+
+Assuming that the file above is stored in `$(pwd)/kong.yml`, a dbless Kong can use it as it starts like this:
+
+``` bash
+$ docker run -d --name kong \
+    -e "KONG_DATABASE=off" \
+    -e "KONG_DECLARATIVE_CONFIG=/home/kong/kong.yml"
+    -e "KONG_PROXY_ACCESS_LOG=/dev/stdout" \
+    -e "KONG_ADMIN_ACCESS_LOG=/dev/stdout" \
+    -e "KONG_PROXY_ERROR_LOG=/dev/stderr" \
+    -e "KONG_ADMIN_ERROR_LOG=/dev/stderr" \
+    -e "KONG_ADMIN_LISTEN=0.0.0.0:8001, 0.0.0.0:8444 ssl" \
+    -v $(pwd):/home/kong
+    kong
+```
+
+With a PostgreSQL database, the initialization steps would be the following:
+
+``` bash
+# Start Postgres on a Docker container
+# Notice that PG_PASSWORD needs to be set
+$ docker run --name kong-database \
+    -p 5432:5432 \
+    -e "POSTGRES_USER=kong" \
+    -e "POSTGRES_DB=kong" \
+    -e "POSTGRES_PASSWORD=$PG_PASSWORD" \
+    -d postgres:9.6
+
+# Run kong migrations to initialize the database
+$ docker run --rm \
+    --link kong-database:kong-database \
+    -e "KONG_DATABASE=postgres" \
+    -e "KONG_PG_HOST=kong-database" \
+    -e "KONG_PG_PASSWORD=$PG_PASSWORD" \
+    kong kong migrations bootstrap
+
+# Load the configuration file which enables the Admin API loopback
+# Notice that it is assumed that kong.yml is located in $(pwd)/kong.yml
+$ docker run --rm \
+    --link kong-database:kong-database \
+    -e "KONG_DATABASE=postgres" \
+    -e "KONG_PG_HOST=kong-database" \
+    -e "KONG_PG_PASSWORD=$PG_PASSWORD" \
+    -v $(pwd):/home/kong \
+    kong kong config db_import /home/kong/kong.yml
+
+    # Start kong
+$ docker run -d --name kong \
+    -e "KONG_DATABASE=postgres" \
+    -e "KONG_PG_HOST=kong-database" \
+    -e "KONG_PG_PASSWORD=$PG_PASSWORD" \
+    -e "KONG_PROXY_ACCESS_LOG=/dev/stdout" \
+    -e "KONG_ADMIN_ACCESS_LOG=/dev/stdout" \
+    -e "KONG_PROXY_ERROR_LOG=/dev/stderr" \
+    -e "KONG_ADMIN_ERROR_LOG=/dev/stderr" \
+    -e "KONG_ADMIN_LISTEN=0.0.0.0:8001, 0.0.0.0:8444 ssl" \
+    -p 8000:8000 \
+    -p 8443:8443 \
+    -p 8001:8001 \
+    -p 8444:8444 \
+    kong
+```
+
+In both cases, once Kong is up and running, the Admin API would be available but protected:
+
+``` bash
+$ curl myhost.dev:8000/admin-api/services
+=> HTTP/1.1 401 Unauthorized
+
+$ curl myhost.dev:8000/admin-api/services?apikey=secret"
+=> HTTP/1.1 200 OK
+{
+    "data": [
+        {
+            "ca_certificates": null,
+            "client_certificate": null,
+            "connect_timeout": 60000,
+        ...
+```
+
 [Back to top](#introduction)
 
 ## Custom Nginx Configuration

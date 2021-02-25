@@ -70,40 +70,44 @@ encouraged, but fall outside the scope of this document.
 Kong's routing design allows it to serve as a proxy for the Admin API itself. In
 this manner, Kong itself can be used to provide fine-grained access control to
 the Admin API. Such an environment requires bootstrapping a new Service that defines
-the `admin_listen` address as the Service's `url`. For example:
+the `admin_listen` address as the Service's `url`.
+
+For example, let's assume that Kong `admin_listen` is `127.0.0.1:8001`, so it is only
+available from localhost. The port `8000` is serving proxy traffic, presumably exposed via
+`myhost.dev:8000`
+
+We want to expose Admin API via the url `:8000/admin-api`, in a controlled way. We can do so by
+creating a Service and Route for it from inside `127.0.0.1`:
 
 ```bash
-# assume that Kong has defined admin_listen as 127.0.0.1:8001, and we want to
-# reach the Admin API via the url `/admin-api`
-
-$ curl -X POST http://localhost:8001/services \
+$ curl -X POST http://127.0.0.1:8001/services \
   --data name=admin-api \
-  --data host=localhost \
+  --data host=127.0.0.1 \
   --data port=8001
 
-$ curl -X POST http://localhost:8001/services/admin-api/routes \
+$ curl -X POST http://127.0.0.1:8001/services/admin-api/routes \
   --data paths[]=/admin-api
+```
 
-# we can now transparently reach the Admin API through the proxy server
-$ curl localhost:8000/admin-api/apis
+We can now transparently reach the Admin API through the proxy server, from outside `127.0.0.1`:
+
+```bash
+$ curl myhost.dev:8000/admin-api/services
 {
    "data":[
       {
-         "uris":[
-            "\/admin-api"
-         ],
-         "id":"653b21bd-4d81-4573-ba00-177cc0108dec",
-         "upstream_read_timeout":60000,
-         "preserve_host":false,
-         "created_at":1496351805000,
-         "upstream_connect_timeout":60000,
-         "upstream_url":"http:\/\/localhost:8001",
-         "strip_uri":true,
-         "https_only":false,
-         "name":"admin-api",
-         "http_if_terminated":true,
-         "upstream_send_timeout":60000,
-         "retries":5
+        "id": "653b21bd-4d81-4573-ba00-177cc0108dec",
+        "created_at": 1422386534,
+        "updated_at": 1422386534,
+        "name": "admin-api",
+        "retries": 5,
+        "protocol": "http",
+        "host": "127.0.0.1",
+        "port": 8001,
+        "path": "/admin-api",
+        "connect_timeout": 60000,
+        "write_timeout": 60000,
+        "read_timeout": 60000
       }
    ],
    "total":1
