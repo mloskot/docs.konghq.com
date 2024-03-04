@@ -4,7 +4,7 @@
 {% if include.render_intro_text %}
 The following examples provide some typical configurations for enabling
 the <code>{{ hub_example.plugin_name }}</code> plugin on a
-[route](/gateway/latest/admin-api/#route-object).
+[route](/gateway/api/admin-ee/latest/#/Routes).
 {% endif %}
 
 {% navtabs %}
@@ -73,7 +73,7 @@ You can see your available ingresses by running `kubectl get ingress`.
     {% if hub_example.render_yaml? %}
     {% navtab Declarative (YAML) %}
 
-Add this section to your declarative configuration file:
+Add this section to your declarative configuration or decK file:
 
 {% include_cached plugins/hub-examples/yaml.html example=hub_example.yaml %}
 
